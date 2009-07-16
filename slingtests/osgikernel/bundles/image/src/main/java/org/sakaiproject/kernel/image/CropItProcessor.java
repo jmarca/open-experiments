@@ -18,6 +18,18 @@
 
 package org.sakaiproject.kernel.image;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.LinkedList;
+
+import javax.imageio.ImageIO;
+import javax.jcr.Node;
+import javax.jcr.RepositoryException;
+
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
@@ -27,346 +39,288 @@ import org.sakaiproject.kernel.api.jcr.support.JCRNodeFactoryServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.imageio.ImageIO;
-import javax.jcr.Node;
-import javax.jcr.PathNotFoundException;
-import javax.jcr.Property;
-import javax.jcr.RepositoryException;
-import javax.jcr.ValueFormatException;
-
 public class CropItProcessor {
 
-  public static JCRNodeFactoryService jcrNodeFactoryService;
-  private static final Logger LOGGER = LoggerFactory.getLogger(CropItProcessor.class);
+	public static JCRNodeFactoryService jcrNodeFactoryService;
+	private static LinkedList<String> iTmpFiles;
+	private static final Logger LOGGER = LoggerFactory
+			.getLogger(CropItProcessor.class);
+	private static final String CONVERT_PROG = "/usr/bin/convert";
 
-  /**
-   * 
-   * @param x
-   *          Where to start cutting on the x-axis.
-   * @param y
-   *          Where to start cutting on the y-axis.
-   * @param width
-   *          The width of the image to cut out. If <=0 then the entire image
-   *          width will be used.
-   * @param height
-   *          The height of the image to cut out.If <=0 then the entire image
-   *          height will be used.
-   * @param dimensions
-   *          A JSONArray with the different dimensions.
-   * @param urlSaveIn
-   *          Where to save the new images.
-   * @param nImgToCrop
-   *          The node that contains the base image.
-   * @param jcrNodeFactoryService
-   * @return
-   * @throws ImageException
-   * @throws IOException 
-   * @throws JCRNodeFactoryServiceException 
-   * @throws RepositoryException 
-   */
-  public static String[] crop(int x, int y, int width, int height,
-      JSONArray dimensions, String urlSaveIn, Node nImgToCrop,
-      JCRNodeFactoryService jcrNodeFactoryService) throws ImageException, IOException, RepositoryException {
+	/**
+	 * 
+	 * @param x
+	 *            Where to start cutting on the x-axis.
+	 * @param y
+	 *            Where to start cutting on the y-axis.
+	 * @param width
+	 *            The width of the image to cut out. If <=0 then the entire
+	 *            image width will be used.
+	 * @param height
+	 *            The height of the image to cut out.If <=0 then the entire
+	 *            image height will be used.
+	 * @param dimensions
+	 *            A JSONArray with the different dimensions.
+	 * @param urlSaveIn
+	 *            Where to save the new images.
+	 * @param nImgToCrop
+	 *            The node that contains the base image.
+	 * @param jcrNodeFactoryService
+	 * @return
+	 * @throws ImageException
+	 * @throws IOException
+	 * @throws JCRNodeFactoryServiceException
+	 * @throws RepositoryException
+	 */
+	public static String[] crop(int x, int y, int width, int height,
+			JSONArray dimensions, String urlSaveIn, Node nImgToCrop,
+			JCRNodeFactoryService jcrNodeFactoryService) throws ImageException,
+			IOException, RepositoryException {
+		iTmpFiles = new LinkedList<String>();
+		InputStream in = null;
 
-    InputStream in = null;
-    ByteArrayOutputStream out = null;
+		// The array that will contain all the cropped and resized images.
+		String[] arrFiles = new String[dimensions.size()];
 
-    // The array that will contain all the cropped and resized images.
-    String[] arrFiles = new String[dimensions.size()];
+		CropItProcessor.jcrNodeFactoryService = jcrNodeFactoryService;
 
-    CropItProcessor.jcrNodeFactoryService = jcrNodeFactoryService;
+		try {
+			if (nImgToCrop != null) {
 
-    try {
-      if (nImgToCrop != null) {
+				String sImg = nImgToCrop.getName();
 
-        String sImg = nImgToCrop.getName();
+				// Read the image
+				try {
+					in = jcrNodeFactoryService.getInputStream(nImgToCrop
+							.getPath());
+				} catch (JCRNodeFactoryServiceException e) {
+					LOGGER
+							.error("Error opening input stream for image node",
+									e);
+					throw new IOException(
+							"Unable to open input stream for image");
+				}
 
-        // get the MIME type of the image
-        String sType = getMimeTypeForNode(nImgToCrop, sImg);
+				BufferedImage img = ImageIO.read(in);
+				String tmpFile = convert2TmpFile(img);
+				try {
+					in.close();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				// Set the correct width & height.
+				width = (width <= 0) ? img.getWidth() : width;
+				height = (height <= 0) ? img.getHeight() : height;
 
-        // check if this is a valid image
-        if (sType.equalsIgnoreCase("image/png")
-            || sType.equalsIgnoreCase("image/jpg")
-            || sType.equalsIgnoreCase("image/bmp")
-            || sType.equalsIgnoreCase("image/gif")
-            || sType.equalsIgnoreCase("image/jpeg")) {
+				// Loop the dimensions and create and save an image for each
+				// one.
+				for (int i = 0; i < dimensions.size(); i++) {
 
-          // Read the image
-          try {
-            in = jcrNodeFactoryService.getInputStream(nImgToCrop.getPath());
-          } catch (JCRNodeFactoryServiceException e) {
-            LOGGER.error("Error opening input stream for image node", e);
-            throw new IOException("Unable to open input stream for image");
-          }
+					JSONObject o = dimensions.getJSONObject(i);
 
-          BufferedImage img = ImageIO.read(in);
+					// get dimension size
+					int iWidth = Integer.parseInt(o.get("width").toString());
+					int iHeight = Integer.parseInt(o.get("height").toString());
 
-          // Set the correct width & height.
-          width = (width <= 0) ? img.getWidth() : width;
-          height = (height <= 0) ? img.getHeight() : height;
+					iWidth = (iWidth <= 0) ? img.getWidth() : iWidth;
+					iHeight = (iHeight <= 0) ? img.getHeight() : iHeight;
 
-          // Cut the desired piece out of the image.
-          BufferedImage subImage = img.getSubimage(x, y, width, height);
+					// Create the image.
+					String outFile = getTmpFile();
+					convert(tmpFile, outFile, width, height, x, y, iWidth,
+							iHeight);
 
-          // Loop the dimensions and create and save an image for each
-          // one.
-          for (int i = 0; i < dimensions.size(); i++) {
+					String sPath = urlSaveIn + iWidth + "x" + iHeight + "_"
+							+ sImg;
+					// Save new image to JCR.
+					try {
+						saveImageToJCR(sPath, outFile, "image/png");
+					} catch (JCRNodeFactoryServiceException e) {
+						LOGGER.error("Error saving cropped image", e);
+						throw new IOException("Unable to save cropped image");
+					}
 
-            JSONObject o = dimensions.getJSONObject(i);
+					arrFiles[i] = sPath;
+				}
+			} else {
+				throw new ImageException("No file found.");
+			}
 
-            // get dimension size
-            int iWidth = Integer.parseInt(o.get("width").toString());
-            int iHeight = Integer.parseInt(o.get("height").toString());
+		} finally {
+			// clear out temporary files
+			removeTmpFiles();
+			// close the streams
+			if (in != null)
+				try {
+					in.close();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+		}
+		return arrFiles;
+	}
 
-            iWidth = (iWidth <= 0) ? img.getWidth() : iWidth;
-            iHeight = (iHeight <= 0) ? img.getHeight() : iHeight;
+	/**
+	 * Will save a stream of an image to the JCR.
+	 * 
+	 * @param sPath
+	 *            The JCR path to save the image in.
+	 * @param sType
+	 *            The Mime type of the node that will be saved.
+	 * @param out
+	 *            The stream you wish to save.
+	 * @throws RepositoryException
+	 * @throws JCRNodeFactoryServiceException
+	 * @throws IOException
+	 */
+	public static void saveImageToJCR(String sPath, String sType, String outFile)
+			throws RepositoryException, JCRNodeFactoryServiceException,
+			IOException {
 
-            // Create the image.
-            out = scaleAndWriteToStream(iWidth, iHeight, subImage, sType, sImg);
+		// Save image into the jcr
+		Node n = jcrNodeFactoryService.getNode(sPath);
 
-            String sPath = urlSaveIn + iWidth + "x" + iHeight + "_" + sImg;
-            // Save new image to JCR.
-            try {
-              saveImageToJCR(sPath, sType, out, nImgToCrop);
-            } catch (JCRNodeFactoryServiceException e) {
-              LOGGER.error("Error saving cropped image", e);
-              throw new IOException("Unable to save cropped image");
-            }
+		// This node doesn't exist yet. Create it.
+		if (n == null) {
+			n = jcrNodeFactoryService.createFile(sPath, sType);
+		}
+		ByteArrayInputStream bais = (ByteArrayInputStream) ImageIO
+				.createImageInputStream(new File(outFile));
+		// convert stream to inputstream
+		try {
+			jcrNodeFactoryService.setInputStream(sPath, bais, sType);
+			n.setProperty(JCRConstants.JCR_MIMETYPE, sType);
+			n.save(); // according to javadoc, stream is read on node save
+		} finally {
+			bais.close();
+		}
+		n.getSession().save();
+	}
 
-            out.close();
-            arrFiles[i] = sPath;
-          }
-        } else {
-          // This is not a valid image.
-          LOGGER.error("Unknown image type: " + sType);
-          throw new ImageException("Invalid filetype: " + sType);
-        }
-      } else {
-        throw new ImageException("No file found.");
-      }
+	/**
+	 * Uses a Runtime.exec()to use imagemagick to perform the given conversion
+	 * operation. Returns true on success, false on failure. Does not check if
+	 * either file exists.
+	 * 
+	 * @param in
+	 *            the input file
+	 * @param out
+	 *            the output file
+	 * @param width
+	 *            the desired crop window width
+	 * @param height
+	 *            the desired crop window height
+	 * @param top
+	 *            the top of the crop window, relative to the top left of the
+	 *            original image
+	 * @param left
+	 *            the left of the crop window, relative to the top left of the
+	 *            original image
+	 * @param dimx
+	 *            the final width of the new image
+	 * @param dimy
+	 *            the final height of the image
+	 * @return true if success, false if not
+	 */
+	private static boolean convert(String in, String out, int width,
+			int height, int top, int left, int dimx, int dimy) {
+		ArrayList<String> command = new ArrayList<String>(10);
 
-    } finally {
-      // close the streams
-      if (in != null)
-        try {
-          in.close();
-        } catch (IOException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
-        }
-      if (out != null)
-        try {
-          out.close();
-        } catch (IOException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
-        }
-    }
-    return arrFiles;
-  }
+		// note: CONVERT_PROG is a class variable that stores the location of
+		// ImageMagick's convert command
+		// it might be something like "/usr/local/magick/bin/convert" or
+		// something else, depending on where you installed it.
+		command.add(CONVERT_PROG);
+		command.add("-crop");
+		command.add(width + "x" + height + "+" + left + "+" + top);
+		command.add("-resize");
+		command.add(dimx + "x" + dimy);
+		command.add("-trim");
+		command.add("+repage");
+		command.add(in);
+		command.add(out);
 
-  /**
-   * Generate a JSON response.
-   * 
-   * @param response
-   *          ERROR or OK
-   * @param typeOfResponse
-   *          The name of the extra tag you want to add. ex: message or files
-   * @param parameters
-   *          The object you wish to parse.
-   * @return
-   */
-  public static String generateResponse(String response, String typeOfResponse,
-      Object parameters) {
-    Map<String, Object> mapResponse = new HashMap<String, Object>();
-    mapResponse.put("response", response);
-    mapResponse.put(typeOfResponse, parameters);
-    return JSONObject.fromObject(mapResponse).toString();
-  }
+		LOGGER.info(command.toString());
 
-  /**
-   * Will save a stream of an image to the JCR.
-   * 
-   * @param sPath
-   *          The JCR path to save the image in.
-   * @param sType
-   *          The Mime type of the node that will be saved.
-   * @param out
-   *          The stream you wish to save.
-   * @throws RepositoryException
-   * @throws JCRNodeFactoryServiceException
-   * @throws IOException
-   */
-  public static void saveImageToJCR(String sPath, String sType,
-      ByteArrayOutputStream out, Node baseNode) throws RepositoryException,
-      JCRNodeFactoryServiceException, IOException {
+		return exec((String[]) command.toArray(new String[1]));
+	}
 
-    // Save image into the jcr
-    Node n = jcrNodeFactoryService.getNode(sPath);
+	/**
+	 * Tries to exec the command, waits for it to finsih, logs errors if exit
+	 * status is nonzero, and returns true if exit status is 0 (success).
+	 * 
+	 * @param command
+	 *            Description of the Parameter
+	 * @return Description of the Return Value
+	 */
+	private static boolean exec(String[] command) {
+		Process proc;
 
-    // This node doesn't exist yet. Create it.
-    if (n == null) {
-      n = jcrNodeFactoryService.createFile(sPath, sType);
-    }
+		try {
+			// System.out.println("Trying to execute command " +
+			// Arrays.asList(command));
+			proc = Runtime.getRuntime().exec(command);
+		} catch (IOException e) {
+			LOGGER.error("IOException while trying to execute " + command);
+			return false;
+		}
 
-    // convert stream to inputstream
-    ByteArrayInputStream bais = new ByteArrayInputStream(out.toByteArray());
-    try {
-      jcrNodeFactoryService.setInputStream(sPath, bais, sType);
-      n.setProperty(JCRConstants.JCR_MIMETYPE, sType);
-    } finally {
-      bais.close();
-    }
-    n.getSession().save();
-  }
+		// System.out.println("Got process object, waiting to return.");
 
-  /**
-   * This method will scale an image to a desired width and height and shall
-   * output the stream of that scaled image.
-   * 
-   * @param width
-   *          The desired width of the scaled image.
-   * @param height
-   *          The desired height of the scaled image.
-   * @param img
-   *          The image that you want to scale
-   * @param sType
-   *          The mime type of the image.
-   * @param sImg
-   *          Filename of the image
-   * @return Returns an outputstream of the scaled image.
-   * @throws IOException
-   */
-  public static ByteArrayOutputStream scaleAndWriteToStream(int width,
-      int height, BufferedImage img, String sType, String sImg)
-      throws IOException {
-    ByteArrayOutputStream out = null;
-    try {
-      Image imgScaled = img.getScaledInstance(width, height,
-          Image.SCALE_AREA_AVERAGING);
+		int exitStatus;
 
-      Map<String, Integer> mapExtensionsToRGBType = new HashMap<String, Integer>();
-      mapExtensionsToRGBType.put("image/jpg", BufferedImage.TYPE_INT_RGB);
-      mapExtensionsToRGBType.put("image/jpeg", BufferedImage.TYPE_INT_RGB);
-      mapExtensionsToRGBType.put("image/gif", BufferedImage.TYPE_INT_RGB);
-      mapExtensionsToRGBType.put("image/png", BufferedImage.TYPE_INT_ARGB);
-      mapExtensionsToRGBType.put("image/bmp", BufferedImage.TYPE_INT_RGB);
+		while (true) {
+			try {
+				exitStatus = proc.waitFor();
+				break;
+			} catch (java.lang.InterruptedException e) {
+				LOGGER.warn("Interrupted: Ignoring and waiting");
+			}
+		}
+		if (exitStatus != 0) {
+			LOGGER.error("Error executing command: " + exitStatus);
+		}
+		return (exitStatus == 0);
+	}
 
-      Integer type = BufferedImage.TYPE_INT_RGB;
-      if (mapExtensionsToRGBType.containsKey(sType)) {
-        type = mapExtensionsToRGBType.get(sType);
-      }
+	/**
+	 * Create a temporary file.
+	 */
 
-      BufferedImage biScaled = toBufferedImage(imgScaled, type);
+	private static String getTmpFile() throws IOException {
+		File tmpFile = File.createTempFile("im4java-", ".png");
+		tmpFile.deleteOnExit();
+		iTmpFiles.add(tmpFile.getAbsolutePath());
+		return tmpFile.getAbsolutePath();
+	}
 
-      // Convert image to a stream
-      out = new ByteArrayOutputStream();
+	/**
+	 * Write a BufferedImage to a temporary file.
+	 */
 
-      String sIOtype = sType.split("/")[1];
+	private static String convert2TmpFile(BufferedImage pBufferedImage)
+			throws IOException {
+		String tmpFile = getTmpFile();
+		ImageIO.write(pBufferedImage, "PNG", new File(tmpFile));
 
-      // If it's a gif try to write it as a jpg
-      if (sType.equalsIgnoreCase("image/gif")) {
-        sImg = sImg.replaceAll("\\.gif", ".jpg");
-        sIOtype = "jpg";
-      }
+		return tmpFile;
+	}
 
-      ImageIO.write(biScaled, sIOtype, out);
-    } finally {
-      if (out != null)
-        out.close();
-    }
+	/**
+	 * Remove all temporary files.
+	 */
 
-    return out;
-  }
-
-  /**
-   * Tries to fetch the mime type for a node. If the node lacks on, the mimetype
-   * will be determined via the extension.
-   * 
-   * @param imgToCrop
-   *          Node of the image.
-   * @param sImg
-   *          Filename of the image.
-   * @return
-   * @throws PathNotFoundException
-   * @throws ValueFormatException
-   * @throws RepositoryException
-   */
-  public static String getMimeTypeForNode(Node imgToCrop, String sImg)
-      throws PathNotFoundException, ValueFormatException, RepositoryException {
-    String sType = "";
-
-    // Standard list of images we support.
-    Map<String, String> mapExtensionsToMimes = new HashMap<String, String>();
-    mapExtensionsToMimes.put("jpg", "image/jpeg");
-    mapExtensionsToMimes.put("gif", "image/gif");
-    mapExtensionsToMimes.put("png", "image/png");
-    mapExtensionsToMimes.put("bmp", "image/bmp");
-
-    // check the MIME type out of JCR
-    if (imgToCrop.hasProperty(JCRConstants.JCR_MIMETYPE)) {
-      Property mimeTypeProperty = imgToCrop
-          .getProperty(JCRConstants.JCR_MIMETYPE);
-      if (mimeTypeProperty != null) {
-        sType = mimeTypeProperty.getString();
-      }
-
-    }
-    // If we couldn't find it in the JCR we will check the extension
-    if (sType.equals("")) {
-      String ext = getExtension(sImg);
-      if (mapExtensionsToMimes.containsKey(ext)) {
-        sType = mapExtensionsToMimes.get(ext);
-      }
-      // default = jpg
-      else {
-        sType = mapExtensionsToMimes.get("jpg");
-      }
-    }
-
-    return sType;
-  }
-
-  /**
-   * Returns the extension of a filename. If no extension is found, the entire
-   * filename is returned.
-   * 
-   * @param img
-   * @return
-   */
-  public static String getExtension(String img) {
-    String[] arr = img.split("\\.");
-    return arr[arr.length - 1];
-  }
-
-  /**
-   * Takes an Image and converts it to a BufferedImage.
-   * 
-   * @param image
-   *          The image you want to convert.
-   * @param type
-   *          The type of the image you want it to convert to. ex:
-   *          BufferedImage.TYPE_INT_ARGB)
-   * @return
-   */
-  public static BufferedImage toBufferedImage(Image image, int type) {
-    int w = image.getWidth(null);
-    int h = image.getHeight(null);
-    BufferedImage result = new BufferedImage(w, h, type);
-    Graphics2D g = result.createGraphics();
-    g.drawImage(image, 0, 0, null);
-    g.dispose();
-    return result;
-  }
+	private static void removeTmpFiles() {
+		try {
+			for (String file : iTmpFiles) {
+				(new File(file)).delete();
+			}
+		} catch (Exception e) {
+			// ignore, since if we can't delete the file, we can't do anything
+			// about it
+		}
+	}
 
 }
