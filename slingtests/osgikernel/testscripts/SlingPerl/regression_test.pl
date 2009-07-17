@@ -63,6 +63,7 @@ use Sling::URL;
 use Tests::Authn;
 use Tests::Connection;
 use Tests::Content;
+use Tests::ContentFile;
 use Tests::Group;
 use Tests::Presence;
 use Tests::Search;
