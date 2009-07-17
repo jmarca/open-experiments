@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-package Tests::Content;
+package Tests::ContentFile;
 
 #{{{imports
 
@@ -19,7 +19,7 @@ use Digest::MD5 'md5_hex';
 #{{{sub run_regression_test
 sub run_regression_test {
     my ( $authn, $verbose, $log ) = @_;
-    my $test_file_path = '../data/test.jpg';
+    my $test_file_path = 'data/test.jpg';
     my $test_file_name = 'test.jpg';
     my $test_file_dest = "blob_$$";
 
@@ -51,9 +51,12 @@ sub run_regression_test {
     if ($data) {
         $blob_hash = md5_hex($data);
     }
+    carp "hash is $blob_hash";
+    carp 'calling content view';
     $content->view($test_file_dest);
     my $fetched_hash = 1;
     $fetched_hash = md5_hex( $content->{'Message'} );
+    carp "hash is $fetched_hash";
 
     ok( $blob_hash eq $fetched_hash, 'I got out what I put in' );
 

@@ -14,6 +14,7 @@ use Tests::Authn;
 use Tests::Authz;
 use Tests::Connection;
 use Tests::Content;
+use Tests::ContentFile;
 use Tests::Group;
 use Tests::ImageCrop;
 use Tests::Messaging;
