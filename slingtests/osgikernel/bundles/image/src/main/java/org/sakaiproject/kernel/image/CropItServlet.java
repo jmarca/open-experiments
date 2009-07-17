@@ -84,16 +84,14 @@ public class CropItServlet extends SlingAllMethodsServlet {
    * @see org.apache.sling.api.servlets.SlingSafeMethodsServlet#doGet(org.apache.sling.api.SlingHttpServletRequest,
    *      org.apache.sling.api.SlingHttpServletResponse)
    */
-  protected void doGet(SlingHttpServletRequest request,
-      SlingHttpServletResponse response) throws IOException {
+  protected void doGet(SlingHttpServletRequest request, SlingHttpServletResponse response)
+      throws IOException {
 
     // Get the parameters.
     int x = Integer.parseInt(request.getRequestParameter("x").toString());
     int y = Integer.parseInt(request.getRequestParameter("y").toString());
-    int width = Integer.parseInt(request.getRequestParameter("width")
-        .toString());
-    int height = Integer.parseInt(request.getRequestParameter("height")
-        .toString());
+    int width = Integer.parseInt(request.getRequestParameter("width").toString());
+    int height = Integer.parseInt(request.getRequestParameter("height").toString());
     String urlSaveIn = request.getRequestParameter("urlSaveIn").toString();
     String urlToCrop = request.getRequestParameter("urlToCrop").toString();
 
@@ -109,15 +107,16 @@ public class CropItServlet extends SlingAllMethodsServlet {
     // Make sure that the path is a right path.
     urlSaveIn = PathUtils.normalizePath(urlSaveIn) + "/";
 
-    JSONArray dimensions = JSONArray.fromObject(request.getRequestParameter(
-        "dimensions").toString());
+    JSONArray dimensions = JSONArray.fromObject(request.getRequestParameter("dimensions")
+        .toString());
 
     try {
       // Get the resource at the provided path. (for /var/image/cropit)
       ResourceResolver resourceResolver = request.getResourceResolver();
       Resource resource = resourceResolver.getResource(urlToCrop);
       if (resource == null) {
-        response.sendError(HttpServletResponse.SC_NOT_FOUND, "No image found at location: " + urlToCrop);
+        response.sendError(HttpServletResponse.SC_NOT_FOUND,
+            "No image found at location: " + urlToCrop);
         return;
       }
 
@@ -134,8 +133,8 @@ public class CropItServlet extends SlingAllMethodsServlet {
 
       jcrService.setSession(s);
 
-      String[] crop = CropItProcessor.crop(x, y, width, height, dimensions,
-          urlSaveIn, imgToCrop, jcrNodeFactoryService);
+      String[] crop = CropItProcessor.crop(x, y, width, height, dimensions, urlSaveIn,
+          imgToCrop, jcrNodeFactoryService);
 
       // Send output back.
       JSONWriter output = new JSONWriter(response.getWriter());
