@@ -51,8 +51,11 @@ For full details run: perl regression_test.pl --man
 #}}}
 
 #{{{imports
+use warnings;
 use strict;
+use Carp;
 use lib qw ( .. );
+use version; our $VERSION = qv('0.0.1');
 use Getopt::Long qw(:config bundling);
 use Pod::Usage;
 use Sling::Authn;
@@ -72,11 +75,12 @@ my $all_tests;
 my $authn_test;
 my $connection_test;
 my $content_test;
+my $contentfile_test;
 my $group_test;
 my $help;
 my $log;
 my $man;
-my $numberForks = 1;
+my $number_forks = 1;
 my $password;
 my $presence_test;
 my $search_test;
@@ -87,23 +91,24 @@ my $user_test;
 my $verbose;
 
 GetOptions (
-    "all" => \$all_tests,
-    "authn" => \$authn_test,
-    "connection" => \$connection_test,
-    "content" => \$content_test,
-    "group" => \$group_test,
-    "help|?" => \$help,
-    "log|L=s" => \$log,
-    "man|M" => \$man,
-    "pass|p=s" => \$password,
-    "presence" => \$presence_test,
-    "search" => \$search_test,
-    "site" => \$site_test,
-    "superuser|u=s" => \$username,
-    "threads|t=i" => \$numberForks,
-    "url|U=s" => \$url,
-    "user" => \$user_test,
-    "verbose|v+" => \$verbose
+    'all' => \$all_tests,
+    'authn' => \$authn_test,
+    'connection' => \$connection_test,
+    'content' => \$content_test,
+    'file' => \$contentfile_test,
+    'group' => \$group_test,
+    'help|?' => \$help,
+    'log|L=s' => \$log,
+    'man|M' => \$man,
+    'pass|p=s' => \$password,
+    'presence' => \$presence_test,
+    'search' => \$search_test,
+    'site' => \$site_test,
+    'superuser|u=s' => \$username,
+    'threads|t=i' => \$number_forks,
+    'url|U=s' => \$url,
+    'user' => \$user_test,
+    'verbose|v+' => \$verbose
 ) or pod2usage(2);
 
 pod2usage(-exitstatus => 0, -verbose => 1) if $help;
@@ -111,12 +116,23 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $man;
 
 $url = Sling::URL::url_input_sanitize( $url );
 
-die "Test super user username not defined" unless defined $username;
-die "Test super user password not defined" unless defined $password;
+croak 'Test super user username not defined' unless defined $username;
+croak 'Test super user password not defined' unless defined $password;
 
 my $auth; # Just use default auth
 
-my @all_tests_list = ( "Authn", "Connection", "Content", "Group", "Presence", "Search", "Site", "User" );
+my %tests = (
+          'Authn' => \&Tests::Authn::run_regression_test,
+	  'Connection' =>  \&Tests::Connection::run_regression_test,
+	  'Content' =>  \&Tests::Content::run_regression_test,
+	  'ContentFile' =>  \&Tests::ContentFile::run_regression_test,
+	  'Group' =>  \&Tests::Group::run_regression_test,
+	  'Presence' =>  \&Tests::Presence::run_regression_test,
+	  'Search' =>  \&Tests::Search::run_regression_test,
+	  'Site' =>  \&Tests::Site::run_regression_test,
+	  'User' =>  \&Tests::User::run_regression_test,
+	  );
+my @all_tests_list = keys %tests;
 my @tests_selected = ();
 
 if ( $all_tests ) {
@@ -124,81 +140,60 @@ if ( $all_tests ) {
 }
 else {
     if ( $authn_test ) {
-        push ( @tests_selected, "Authn" );
+        push  @tests_selected, 'Authn' ;
     }
     if ( $connection_test ) {
-        push ( @tests_selected, "Connection" );
+        push  @tests_selected, 'Connection' ;
     }
     if ( $content_test ) {
-        push ( @tests_selected, "Content" );
+        push  @tests_selected, 'Content' ;
+    }
+    if ( $contentfile_test ) {
+        push  @tests_selected, 'ContentFile' ;
     }
     if ( $group_test ) {
-        push ( @tests_selected, "Group" );
+        push  @tests_selected, 'Group' ;
     }
     if ( $presence_test ) {
-        push ( @tests_selected, "Presence" );
+        push  @tests_selected, 'Presence' ;
     }
     if ( $search_test ) {
-        push ( @tests_selected, "Search" );
+        push  @tests_selected, 'Search' ;
     }
     if ( $site_test ) {
-        push ( @tests_selected, "Site" );
+        push  @tests_selected, 'Site' ;
     }
     if ( $user_test ) {
-        push ( @tests_selected, "User" );
+        push  @tests_selected, 'User' ;
     }
 }
 
-$numberForks = ( $numberForks || 1 );
-$numberForks = ( $numberForks =~ /^[0-9]+$/ ? $numberForks : 1 );
-$numberForks = ( $numberForks < 32 ? $numberForks : 1 );
-$numberForks = ( @tests_selected < $numberForks ? @tests_selected : $numberForks );
+$number_forks = ( $number_forks || 1 );
+$number_forks = ( $number_forks =~ /^[0-9]+$/sxm ? $number_forks : 1 );
+$number_forks = ( $number_forks < 32 ? $number_forks : 1 );
+$number_forks = ( @tests_selected < $number_forks ? @tests_selected : $number_forks );
 #}}}
 
 #{{{ main execution path
 my @childs = ();
-for ( my $i = 0 ; $i < $numberForks ; $i++ ) {
-    my $pid = fork();
-    if ( $pid ) { push( @childs, $pid ); } # parent
+for  my $i ( 0 ..  $number_forks ) {
+    my $pid = fork;
+    if ( $pid ) { push @childs, $pid ; } # parent
     elsif ( $pid == 0 ) { # child
-        for ( my $j = $i ; $j < @tests_selected ; $j += $numberForks ) {
-            my $test = $tests_selected[ $j ];
-            my $authn = new Sling::Authn( $url, $username, $password, $auth, $verbose, $log );
-	    if ( $test =~ /^Authn$/ ) {
-                Tests::Authn::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    elsif ( $test =~ /^Connection$/ ) {
-                Tests::Connection::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    elsif ( $test =~ /^Content$/ ) {
-                Tests::Content::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    elsif ( $test =~ /^Group$/ ) {
-                Tests::Group::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    elsif ( $test =~ /^Presence$/ ) {
-                Tests::Presence::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    elsif ( $test =~ /^Search$/ ) {
-                Tests::Search::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    elsif ( $test =~ /^Site$/ ) {
-                Tests::Site::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    elsif ( $test =~ /^User$/ ) {
-                Tests::User::run_regression_test( \$authn, $verbose, $log );
-	    }
-	    else {
-	        die "Unknown regression test option: \"$test\"!";
-	    }
+        my $j = $i;
+	while ( $j < @tests_selected ){
+	  my $test = $tests_selected[ $j ];
+	  $j += $number_forks;
+	  my $authn = new Sling::Authn( $url, $username, $password, $auth, $verbose, $log );
+	  &{$tests{$test}}( \$authn, $verbose, $log );
 	}
-	exit( 0 );
-    }
+	exit 0 ;
+      }
     else {
-        die "Could not fork $i!";
+        croak "Could not fork $i!";
     }
 }
-foreach ( @childs ) { waitpid( $_, 0 ); }
+foreach ( @childs ) { waitpid $_, 0 ; }
 #}}}
 
 1;
