@@ -13,6 +13,7 @@ use Test::More;
 use version; our $VERSION = qv('0.0.1');
 use FileHandle;
 use Digest::MD5 'md5_hex';
+use Data::Dumper;
 
 #}}}
 
@@ -21,8 +22,8 @@ sub run_regression_test {
     my ( $authn, $verbose, $log ) = @_;
     my $test_file_path = 'data/test.jpg';
     my $test_file_name = 'test.jpg';
-    my $test_file_dest = "blob_$$";
-
+    my $test_file_dest = "blob_$$.jpg";
+    my $node_properties = ['jcr:primaryType','nt:file'];
     # Sling content object:
     my $content = new Sling::Content( $authn, $verbose, $log );
 
@@ -33,9 +34,12 @@ sub run_regression_test {
         $content->upload_file(
             $test_file_path, $test_file_dest, $test_file_name
         ),
-        "Content Test: Content \"$test_file_name\" uploaded successfully."
+        "Content Test: Content \"$test_file_name\" uploaded successfully to $test_file_dest."
     );
     ok( $content->exists($test_file_dest),
+        "Content Test: Content \"$test_file_dest\" exists." );
+
+    ok( $content->add($test_file_dest,$node_properties),
         "Content Test: Content \"$test_file_dest\" exists." );
 
     # is it the same?
@@ -55,15 +59,17 @@ sub run_regression_test {
     carp 'calling content view';
     $content->view($test_file_dest);
     my $fetched_hash = 1;
+    my $message =  $content->{'Message'};
+    carp 'content is ' , Dumper $content;
     $fetched_hash = md5_hex( $content->{'Message'} );
     carp "hash is $fetched_hash";
 
     ok( $blob_hash eq $fetched_hash, 'I got out what I put in' );
 
-    ok( $content->delete($test_file_dest),
-        "Content Test: Content \"$test_file_dest\" deleted successfully." );
-    ok( !$content->exists($test_file_dest),
-        "Content Test: Content \"$test_file_dest\" should no longer exist." );
+    # ok( $content->delete($test_file_dest),
+#         "Content Test: Content \"$test_file_dest\" deleted successfully." );
+#     ok( !$content->exists($test_file_dest),
+#         "Content Test: Content \"$test_file_dest\" should no longer exist." );
 
     return;
 }
