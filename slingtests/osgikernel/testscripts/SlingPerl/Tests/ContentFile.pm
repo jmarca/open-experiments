@@ -52,7 +52,7 @@ sub compare_localfile_and_repo {
 #{{{sub run_regression_test
 sub run_regression_test {
     my ( $authn, $verbose, $log ) = @_;
-    my $test_file_path = 'data/test_tiny.jpg';
+    my $test_file_path = 'data/test.jpg';
     my $test_file_name = 'test.jpg';
     my $test_file_dest = "blob_$$";
     my $test_crop_dest = "blob_cropped$$";
@@ -92,17 +92,14 @@ sub run_regression_test {
     my $dims = [ { 'width' => 256, 'height' => 256 } ];
     my $args = {
          'x'          => 10,
-         'y'          => 10,
-         'width'      => 100,
+         'y'          => 50,
+         'width'      => 300,
          'height'     => 300,
          'urlSaveIn'  => $test_crop_dest,
-         'urlToCrop'  => "$test_file_dest/$test_file_name",
+         'urlToCrop'  => "/$test_file_dest/$test_file_name",
          'dimensions' => encode_json $dims,
      };
-    my $arrayref_args = [ map {"$_=" . $args->{$_} }  keys %{$args} ];
-    carp Dumper $arrayref_args;
-
-    $cropper->crop( $arrayref_args );
+    $cropper->crop( $args );
 
     # do it locally
     my $image = Image::Magick->new;

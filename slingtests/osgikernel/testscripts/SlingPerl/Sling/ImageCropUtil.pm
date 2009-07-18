@@ -11,24 +11,44 @@ use Sling::URL;
 
 #{{{sub add_setup
 sub add_setup {
-    my ( $baseURL, $remoteDest , $properties ) = @_;
+    my ( $baseURL, $remoteDest ) = @_;
     if ( !defined $baseURL ) { croak "No base URL provided!"; }
     if ( !defined $remoteDest ) {
         croak "No position or ID to perform action for specified!";
     }
-    my $property_post_vars = Sling::URL::properties_array_to_string( $properties );
-    my $postVariables = "\$postVariables = [$property_post_vars]";
-    return "post $baseURL/$remoteDest $postVariables";
+    # bug? in CropItServlet??  does not handle post, only get, but servlet methods
+    # annotation is POST ??  nutty
+    # return "post $baseURL/$remoteDest $postVariables";
+    return "get $baseURL/$remoteDest"; # need to hack to mix the params in the request body
 }
 #}}}
 
 #{{{sub add_eval
 sub add_eval {
     my ( $res ) = @_;
-    return ( $$res->code =~ /^20(0|1)$/ );
+    return ( ${$res}->code =~ /^20(0|1)$/ );
 }
 #}}}
 
+
+sub build_base_request {
+    my ( $object, $string ) = @_;
+    if(!defined $string){ croak "No string defined to turn into request!"  ;}
+    if(!  defined $object){croak "No reference to a suitable object supplied!";}
+    my $authn = ${$object}->{ 'Authn' };
+    die "Object does not reference a suitable auth object" unless defined $authn;
+    my $verbose = ${$object}->{ 'Verbose' };
+    my $log = ${$object}->{ 'Log' };
+    return Sling::Request::string_to_request( $string, $authn, $verbose, $log );
+}
+
+sub fire_request {
+  my ($object, $request) = @_;
+    my $authn = ${$object}->{ 'Authn' };
+    my $lwp = ${$authn}->{ 'LWP' };
+    my $res = ${$lwp}->request( $request );
+    return \$res;
+}
 
 1;
 
