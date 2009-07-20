@@ -190,9 +190,10 @@ public class CropItProcessor {
 				.createImageInputStream(new File(outFile));
 		// convert stream to inputstream
 		try {
-			jcrNodeFactoryService.setInputStream(sPath, bais, sType);
-			n.setProperty(JCRConstants.JCR_MIMETYPE, sType);
-			n.save(); // according to javadoc, stream is read on node save
+			Node n2 = jcrNodeFactoryService.setInputStream(sPath, bais, sType);
+			n2.setProperty(JCRConstants.JCR_MIMETYPE, sType);
+      n2.save(); // according to javadoc, stream is read on node save
+      n.save(); // according to javadoc, stream is read on node save
 		} finally {
 			bais.close();
 		}
