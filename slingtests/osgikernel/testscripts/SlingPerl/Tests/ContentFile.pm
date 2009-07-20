@@ -53,9 +53,10 @@ sub compare_localfile_and_repo {
 sub run_regression_test {
     my ( $authn, $verbose, $log ) = @_;
     my $test_file_path = 'data/test.jpg';
+    my $test_file_cropped_path = 'data/256x256_test.jpg';
     my $test_file_name = 'test.jpg';
     my $test_file_dest = "blob_$$";
-    my $test_crop_dest = "blob_cropped$$";
+    my $test_crop_dest = "/blob_cropped$$";
 
     # Sling content object:
     my $content = new Sling::Content( $authn, $verbose, $log );
@@ -110,23 +111,29 @@ sub run_regression_test {
     $image->Crop( 'geometry', $geometry );
     my $scale = join q{x}, $dims->[0]->{'width'}, $dims->[0]->{'height'};
     $image->Thumbnail( 'geometry', "$scale" );
-    my $blob = $image->ImageToBlob;
+    $image->Write($test_file_cropped_path);
+
     undef $image;
-    my $blob_hash = md5_hex($blob);
-
     # is it the same?
-
+    carp Dumper {'test_crop_des'=>$test_crop_dest,
+		 'scale'=>   $scale,
+                 'test_file_name'=>  $test_file_name,
+	       };
     ok(
-        compare_hash_and_repo(
+        compare_localfile_and_repo(
             {
                 'content'    => $content,
-                'blob_hash'  => $blob_hash,
-                'storedpath' => $test_file_dest . q{/}
+                'localfile'  => $test_file_cropped_path,
+                'storedpath' => $test_crop_dest . q{/}
                   . $scale . q{_}
                   . $test_file_name,
             }
         ),
-        'Content Test: servelet cropped and locally cropped files are the same'
+        'Content Test: servlet cropped '
+          . $test_crop_dest . q{/}
+          . $scale . q{_}
+          . $test_file_name
+          . " and locally cropped $test_file_cropped_path are the same"
     );
 
 #     ok( $content->delete($test_file_dest),
