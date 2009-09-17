@@ -81,10 +81,10 @@ public class CropItServlet extends SlingAllMethodsServlet {
   /**
    * Perform the actual request. {@inheritDoc}
    * 
-   * @see org.apache.sling.api.servlets.SlingSafeMethodsServlet#doGet(org.apache.sling.api.SlingHttpServletRequest,
+   * @see org.apache.sling.api.servlets.SlingAllMethodsServlet#doPost(org.apache.sling.api.SlingHttpServletRequest,
    *      org.apache.sling.api.SlingHttpServletResponse)
    */
-  protected void doGet(SlingHttpServletRequest request,
+  protected void doPost(SlingHttpServletRequest request,
       SlingHttpServletResponse response) throws IOException {
 
     // Get the parameters.

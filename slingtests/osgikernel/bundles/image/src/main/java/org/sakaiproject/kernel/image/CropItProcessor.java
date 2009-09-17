@@ -227,10 +227,10 @@ public class CropItProcessor {
     try {
       jcrNodeFactoryService.setInputStream(sPath, bais, sType);
       n.setProperty(JCRConstants.JCR_MIMETYPE, sType);
+      n.save();
     } finally {
       bais.close();
     }
-    n.getSession().save();
   }
 
   /**

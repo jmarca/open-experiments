@@ -4,14 +4,15 @@ use warnings;
 use strict;
 use Carp;
 use Data::Dumper;
+use HTTP::Request::Common qw(DELETE GET POST);
 use version; our $VERSION = qv('0.0.1');
 
 use lib qw ( .. );
 use Sling::URL;
 
-#{{{sub add_setup
-sub add_setup {
-    my ( $baseURL, $remoteDest ) = @_;
+#{{{sub post_setup
+sub post_setup {
+    my ( $baseURL, $remoteDest, $args ) = @_;
     if ( !defined $baseURL ) { croak "No base URL provided!"; }
     if ( !defined $remoteDest ) {
         croak "No position or ID to perform action for specified!";
@@ -19,15 +20,13 @@ sub add_setup {
     # bug? in CropItServlet??  does not handle post, only get, but servlet methods
     # annotation is POST ??  nutty
     # return "post $baseURL/$remoteDest $postVariables";
-    return "get $baseURL/$remoteDest"; # need to hack to mix the params in the request body
+    # I don't see the point of the Request.pm utilities.  this is cleaner to me
+    return POST("$baseURL/$remoteDest",$args);
 }
 #}}}
 
-#{{{sub add_eval
-sub add_eval {
-    my ( $res ) = @_;
-    return ( ${$res}->code =~ /^20(0|1)$/ );
-}
+#{{{sub *_eval
+#  sub *_eval # use the versions in ContentUtil.pm
 #}}}
 
 
@@ -48,6 +47,16 @@ sub fire_request {
     my $lwp = ${$authn}->{ 'LWP' };
     my $res = ${$lwp}->request( $request );
     return \$res;
+}
+
+
+sub _build_props_from_args {
+    my $args = shift;
+    my $string;
+    my @str_parts = map {"$_,$args->{$_}"} keys %{$args};
+    $string = join q{&}, @str_parts ;
+
+    return $string;
 }
 
 1;
@@ -83,14 +92,10 @@ result of performing the request.
 
 =head1 SUBROUTINES/METHODS
 
-=head2 add_setup
+=head2 post_setup
 
 Returns a textual representation of the request needed to add content to the
 system.
-
-=head2 add_eval
-
-Check result of adding content.
 
 
 

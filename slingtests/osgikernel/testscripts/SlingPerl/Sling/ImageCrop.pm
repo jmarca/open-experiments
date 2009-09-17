@@ -13,6 +13,7 @@ use Sling::Request;
 use Sling::ImageCropUtil;
 use version; our $VERSION = qv('0.0.1');
 use Data::Dumper;
+
 #}}}
 
 #{{{sub new
@@ -49,22 +50,14 @@ sub set_results {
 #{{{sub crop
 sub crop {
     my ( $self, $properties ) = @_;
-    my $string =
-        Sling::ImageCropUtil::add_setup(
-            $self->{'BaseURL'}, $self->{'servlet_path'}
-        );
-    my $req =  Sling::ImageCropUtil::build_base_request(\$self,$string);
+    my $req =
+      Sling::ImageCropUtil::post_setup( $self->{'BaseURL'},
+        $self->{'servlet_path'}, $properties );
     carp Dumper $req;
 
-    my $argstring = _valid_view_args($properties);
-    my $uri = $req->uri;
-    $uri->query($argstring);
-    $req->uri($uri);
-    carp Dumper $req;
-
-    my $res  = Sling::ImageCropUtil::fire_request(\$self,$req);
+    my $res = Sling::ImageCropUtil::fire_request( \$self, $req );
     carp Dumper $res;
-    my $success = Sling::ImageCropUtil::add_eval($res);
+    my $success = Sling::ContentUtil::add_eval($res);
     my $message = 'ImageCrop crop ';
     $message .= ( $success ? 'succeeded!' : 'failed!' );
     $self->set_results( "$message", $res );
@@ -72,15 +65,6 @@ sub crop {
 }
 
 #}}}
-
-sub _valid_view_args {
-    my $args = shift;
-    my $string;
-    my @str_parts = map {"$_=$args->{$_}"} keys %{$args};
-    $string = join q{&}, @str_parts ;
-
-    return $string;
-}
 
 1;
 
