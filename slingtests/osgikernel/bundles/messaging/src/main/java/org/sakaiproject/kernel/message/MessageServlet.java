@@ -17,12 +17,19 @@
  */
 package org.sakaiproject.kernel.message;
 
+import org.apache.felix.scr.annotations.Properties;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.sling.SlingServlet;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
 import org.apache.sling.api.request.RequestPathInfo;
 import org.apache.sling.api.resource.Resource;
+import org.sakaiproject.kernel.api.doc.ServiceDocumentation;
+import org.sakaiproject.kernel.api.doc.ServiceMethod;
 import org.sakaiproject.kernel.api.message.MessageConstants;
 import org.sakaiproject.kernel.api.message.MessagingService;
+import org.sakaiproject.kernel.resource.VirtualResourceProvider;
 import org.sakaiproject.kernel.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,13 +37,20 @@ import org.slf4j.LoggerFactory;
 import javax.jcr.Session;
 
 /**
- * @scr.component metatype="no" immediate="true"
- * @scr.service interface="javax.servlet.Servlet"
- * @scr.property name="sling.servlet.resourceTypes" values="sakai/messagestore"
- * @scr.property name="sling.servlet.methods" values.0="POST" values.1="PUT"
- *               values.2="DELETE" values.3="GET"
- * @scr.reference interface="org.sakaiproject.kernel.api.message.MessagingService" name="MessagingService"
  */
+@SlingServlet(resourceTypes = "sakai/messagestore", methods = { "GET", "POST", "PUT",
+    "DELETE" })
+@Properties(value = {
+    @Property(name = "service.description", value = "Provides support for message stores."),
+    @Property(name = "service.vendor", value = "The Sakai Foundation") })
+@ServiceDocumentation(
+    name = "MessageServlet", shortDescription = "BigStore servlet for messaging", 
+    description = "This servlet resends requests to /_user/message to /_user/message/aa/bb/cc/dd/currentuser", 
+    methods = {
+      @ServiceMethod(name = "GET"), @ServiceMethod(name = "POST"),
+      @ServiceMethod(name = "PUT"), @ServiceMethod(name = "DELETE")
+    }
+)
 public class MessageServlet extends AbstractMessageServlet {
 
   /**
@@ -45,13 +59,11 @@ public class MessageServlet extends AbstractMessageServlet {
   private static final long serialVersionUID = -2663916166760531044L;
   private static final Logger LOGGER = LoggerFactory.getLogger(MessageServlet.class);
 
+  @Reference
   private MessagingService messagingService;
-  protected void bindMessagingService(MessagingService messagingService) {
-    this.messagingService = messagingService;
-  }
-  protected void unbindMessagingService(MessagingService messagingService) {
-    this.messagingService = null;
-  }
+
+  @Reference
+  protected VirtualResourceProvider virtualResourceProvider;
 
   /**
    * {@inheritDoc}
@@ -69,21 +81,32 @@ public class MessageServlet extends AbstractMessageServlet {
     if (selector == null) {
       selector = "";
     }
-    LOGGER.info("Request [{}], ResourcePath [{}], Selector [{}], MessageId[{}]", new Object[] {
-        request.getRequestURI(), resourcePath, selector, messageId });
+    LOGGER.info("Request [{}], ResourcePath [{}], Selector [{}], MessageId[{}]",
+        new Object[] { request.getRequestURI(), resourcePath, selector, messageId });
 
     String finalPath = "";
     String storePath = resourcePath.substring(0, resourcePath.lastIndexOf("/"));
     if (storePath.equals(MessageConstants._USER_MESSAGE)) {
 
       Session session = request.getResourceResolver().adaptTo(Session.class);
-      String messagePath = messagingService.getFullPathToMessage(request.getRemoteUser(), messageId, session);
+      String messagePath = messagingService.getFullPathToMessage(request.getRemoteUser(),
+          messageId, session);
       finalPath = messagePath + selector;
     } else {
       finalPath = PathUtils.toInternalHashedPath(storePath, messageId, "");
     }
     LOGGER.info("Processed Path to {} ", finalPath);
     return finalPath;
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.sakaiproject.kernel.resource.AbstractVirtualPathServlet#getVirtualResourceProvider()
+   */
+  @Override
+  protected VirtualResourceProvider getVirtualResourceProvider() {
+    return virtualResourceProvider;
   }
 
 }

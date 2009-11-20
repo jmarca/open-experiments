@@ -1,19 +1,35 @@
+#!/bin/bash
+
 #Sakai 2+3 Hybrid Nightly
 # don't forget to trust the svn certificate permanently: svn info https://source.sakaiproject.org/svn
 # and svn info https://source.caret.cam.ac.uk/camtools
 
+# Treat unset variables as an error when performing parameter expansion
+set -o nounset
+# Exit immediately if a simple command exits with a non-zero status
+set -o errexit
+
 # environment
 source /etc/profile
-export JAVA_HOME=/System/Library/Frameworks/JavaVM.framework/Versions/1.5/Home
+export PATH=/usr/local/bin:$PATH
+export BUILD_DIR="/home/hybrid"
+export JAVA_HOME=/opt/jdk1.6.0_17
 export PATH=$JAVA_HOME/bin:${PATH}
 export MAVEN_HOME=/usr/local/apache-maven-2.2.1
 export M2_HOME=/usr/local/apache-maven-2.2.1
 export PATH=$MAVEN_HOME/bin:${PATH}
 export MAVEN_OPTS="-Xmx1024m -XX:MaxPermSize=256m"
-export JAVA_OPTS="-server -Xmx1024m -XX:MaxPermSize=512m -Djava.awt.headless=true -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Dsakai.demo=true -Dsakai.cookieName=SAKAI2SESSIONID"
+export JAVA_OPTS="-server -Xmx1024m -XX:MaxPermSize=512m -Djava.awt.headless=true -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Dsun.lang.ClassLoader.allowArraySyntax=true -Dsakai.demo=true -Dsakai.cookieName=SAKAI2SESSIONID"
 BUILD_DATE=`date "+%D %R"`
-BUILD_DIR="/Users/hybrid"
 cd $BUILD_DIR
+
+# ensure logs directory exists
+if [ ! -d $BUILD_DIR/logs ]
+then
+	mkdir $BUILD_DIR/logs
+else
+	echo "$BUILD_DIR/logs already exists - probably should clean"
+fi
 
 # shutdown all running instances
 killall -9 java
@@ -29,6 +45,7 @@ rm -rf ~/.m2/repository/
 # build sling/trunk
 # not needed as long as hudson builds are getting deployed to apache-snapshot repo
 # org.apache.sling.launchpad.base-2.0.5-SNAPSHOT-app.jar cannot be found - build sling
+echo "Building slink/trunk..."
 cd $BUILD_DIR
 svn checkout -q http://svn.apache.org/repos/asf/sling/trunk sling
 cd sling
@@ -36,6 +53,7 @@ mvn clean install -Dmaven.test.skip=true
 rm -rf sling
 
 # build sakai 3
+echo "Building sakai3/trunk..."
 cd $BUILD_DIR
 mkdir sakai3
 cd sakai3
@@ -44,8 +62,9 @@ cd open-experiments/slingtests/osgikernel/
 mvn clean install -Dmaven.test.skip=true
 
 # start sakai 3 instance
+echo "Starting sakai3 instance..."
 cd app/target/
-java -jar org.sakaiproject.kernel.app-0.1-SNAPSHOT.jar -f - > $BUILD_DIR/sakai3/log.txt 2>&1 &
+java -jar org.sakaiproject.kernel.app-0.1-SNAPSHOT.jar -p 8008 -f - > $BUILD_DIR/logs/sakai3-log.txt 2>&1 &
 
 # untar tomcat
 cd $BUILD_DIR
@@ -54,6 +73,7 @@ mv apache-tomcat-5.5.26 sakai2-demo
 mkdir sakai2-demo/sakai
 
 # build kernel 1
+echo "Building k1/trunk..."
 svn checkout -q https://source.sakaiproject.org/svn/kernel/trunk/ kernel
 cd kernel
 mvn clean install -Dmaven.test.skip=true
@@ -61,6 +81,7 @@ cd ..
 rm -rf kernel
 
 # build sakai 2
+echo "Building sakai2/trunk..."
 svn checkout -q https://source.sakaiproject.org/svn/sakai/trunk/ sakai
 cd sakai/
 REPO_REV=`svn info|grep Revision`
@@ -69,7 +90,9 @@ rm -rf login/
 svn checkout -q https://source.sakaiproject.org/svn/login/branches/SAK-17223/ login
 # KERN-360 Servlet and TrustedLoginFilter RESTful services
 cp -R $BUILD_DIR/sakai3/open-experiments/hybrid .
-sed -i 's/<\/modules>/<module>hybrid<\/module><\/modules>/gi' pom.xml 
+#sed -i 's/<\/modules>/<module>hybrid<\/module><\/modules>/gi' pom.xml 
+# work around for broken sed on some systems
+perl -pwi -e 's/<\/modules>/<module>hybrid<\/module><\/modules>/gi' pom.xml
 #
 mvn clean install sakai:deploy -Dmaven.test.skip=true -Dmaven.tomcat.home=$BUILD_DIR/sakai2-demo
 cd ..
@@ -95,6 +118,7 @@ echo "login.k2.authentication=true" >> sakai2-demo/sakai/sakai.properties
 echo "login.k2.authentication.vaildateUrl=http://localhost:8080/var/cluster/user.cookie.json?c=" >> sakai2-demo/sakai/sakai.properties
 
 # start sakai 2 tomcat
+echo "Starting sakai2 instance..."
 sakai2-demo/bin/startup.sh 
 
 # final cleanup
