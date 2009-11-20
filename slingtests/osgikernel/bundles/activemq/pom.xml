@@ -42,7 +42,7 @@ org.codehaus.jam*;resolution:=optional,
 org.springframework*;resolution:=optional,
 org.springframework.beans.factory.xml;resolution:=optional,
 org.w3c.dom.traversal*;resolution:=optional,
-org.apache.commons.net*;resolution:=optional,
+org.apache.commons.net.ftp;resolution:=optional,
 org.apache.kahadb*;resolution:=optional,
 *
             </Import-Package>
