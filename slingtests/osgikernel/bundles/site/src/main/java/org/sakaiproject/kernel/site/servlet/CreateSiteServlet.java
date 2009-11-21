@@ -97,9 +97,9 @@ import javax.servlet.http.HttpServletResponse;
         extensions=@ServiceExtension(name="html", description="A standard HTML response for creating a node.")),
     methods=@ServiceMethod(name="POST",
         description={"Creates a site, with a name specified in :sitepath from an optional template. In the process the servlet" +
-        		"will also create all realted structures (message stores etc) and set up any groups associated with the site. " +
+        		"will also create all related structures (message stores etc) and set up any groups associated with the site. " +
         		"Create permissions may be controlled by the sakai:sitegroupcreate property, containing a list of principals allowed" +
-        		"to create sites that node. If the current user is not allowed to create a site in the chosen location, then" +
+        		"to create sites at that node. If the current user is not allowed to create a site in the chosen location, then" +
         		"a 403 is returned.",
             "Example<br>" +
             "<pre>Example needed</pre>"
@@ -110,7 +110,7 @@ import javax.servlet.http.HttpServletResponse;
         
         },
         response={
-          @ServiceResponse(code=200,description="Success a body is returned containing a json ove the name of the version saved"),
+          @ServiceResponse(code=200,description="Success a body is returned containing a json of the name of the version saved"),
           @ServiceResponse(code=400,description={
               "If the :sitepath parameter is not present",
               "If the sakai:site-template parameter does not point to a template in JCR"
